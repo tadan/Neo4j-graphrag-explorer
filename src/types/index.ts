@@ -7,19 +7,21 @@ export interface GraphNode {
   id: string
   label: string
   type: 'Person' | 'Company' | 'Technology' | 'Concept' | 'Document'
-  properties: Record<string, any>
+  properties: Record<string, unknown>
   x?: number
   y?: number
   vx?: number
   vy?: number
+  fx?: number | null
+  fy?: number | null
 }
 
 export interface GraphRelationship {
   id: string
-  source: string
-  target: string
+  source: string | GraphNode
+  target: string | GraphNode
   type: string
-  properties?: Record<string, any>
+  properties?: Record<string, unknown>
 }
 
 export interface GraphData {

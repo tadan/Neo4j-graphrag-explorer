@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
-import type { GraphData, GraphNode } from '../types'
+import type { GraphData, GraphNode, GraphRelationship } from '../types'
 import { cn } from '../lib/utils'
 
 interface GraphVisualizationProps {
@@ -9,6 +9,24 @@ interface GraphVisualizationProps {
   onNodeSelect: (node: GraphNode | null) => void
   highlightedNodes?: string[]
   className?: string
+}
+
+// D3 simulation node type with position properties
+type SimulationNode = GraphNode & d3.SimulationNodeDatum
+
+// D3 simulation link type
+type SimulationLink = GraphRelationship & {
+  source: SimulationNode
+  target: SimulationNode
+}
+
+// Color mapping for node types - using Neo4j brand colors
+const nodeColors: Record<string, string> = {
+  Person: '#FF6B6B',
+  Company: '#4ECDC4',
+  Technology: '#008CC1', // Neo4j blue
+  Concept: '#9C27B0', // Neo4j purple
+  Document: '#95E1D3'
 }
 
 /**
@@ -31,15 +49,6 @@ export function GraphVisualization({
 }: GraphVisualizationProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
-
-  // Color mapping for node types - using Neo4j brand colors
-  const nodeColors: Record<string, string> = {
-    Person: '#FF6B6B',
-    Company: '#4ECDC4',
-    Technology: '#008CC1', // Neo4j blue
-    Concept: '#9C27B0', // Neo4j purple
-    Document: '#95E1D3'
-  }
 
   useEffect(() => {
     // Update dimensions on resize
@@ -76,9 +85,9 @@ export function GraphVisualization({
     svg.call(zoom)
 
     // Create force simulation
-    const simulation = d3.forceSimulation(data.nodes as any)
-      .force('link', d3.forceLink(data.relationships)
-        .id((d: any) => d.id)
+    const simulation = d3.forceSimulation<SimulationNode>(data.nodes as SimulationNode[])
+      .force('link', d3.forceLink<SimulationNode, SimulationLink>(data.relationships)
+        .id((d) => d.id)
         .distance(100))
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2))
@@ -128,10 +137,10 @@ export function GraphVisualization({
       .data(data.nodes)
       .join('g')
       .attr('cursor', 'pointer')
-      .call(d3.drag<any, GraphNode>()
+      .call(d3.drag<SVGGElement, SimulationNode>()
         .on('start', dragstarted)
         .on('drag', dragged)
-        .on('end', dragended) as any)
+        .on('end', dragended))
 
     // Node circles
     node.append('circle')
@@ -164,38 +173,38 @@ export function GraphVisualization({
       .attr('class', 'text-[10px] font-bold fill-white pointer-events-none')
       .text(d => d.type.charAt(0))
 
-    // Update positions on simulation tick
-    simulation.on('tick', () => {
-      link
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y)
-
-      linkLabel
-        .attr('x', (d: any) => (d.source.x + d.target.x) / 2)
-        .attr('y', (d: any) => (d.source.y + d.target.y) / 2)
-
-      node.attr('transform', (d: any) => `translate(${d.x},${d.y})`)
-    })
-
     // Drag handlers
-    function dragstarted(event: any, d: any) {
+    function dragstarted(event: d3.D3DragEvent<SVGGElement, SimulationNode, SimulationNode>, d: SimulationNode) {
       if (!event.active) simulation.alphaTarget(0.3).restart()
       d.fx = d.x
       d.fy = d.y
     }
 
-    function dragged(event: any, d: any) {
+    function dragged(event: d3.D3DragEvent<SVGGElement, SimulationNode, SimulationNode>, d: SimulationNode) {
       d.fx = event.x
       d.fy = event.y
     }
 
-    function dragended(event: any, d: any) {
+    function dragended(event: d3.D3DragEvent<SVGGElement, SimulationNode, SimulationNode>, d: SimulationNode) {
       if (!event.active) simulation.alphaTarget(0)
       d.fx = null
       d.fy = null
     }
+
+    // Update positions on simulation tick
+    simulation.on('tick', () => {
+      link
+        .attr('x1', (d) => (d.source as SimulationNode).x ?? 0)
+        .attr('y1', (d) => (d.source as SimulationNode).y ?? 0)
+        .attr('x2', (d) => (d.target as SimulationNode).x ?? 0)
+        .attr('y2', (d) => (d.target as SimulationNode).y ?? 0)
+
+      linkLabel
+        .attr('x', (d) => (((d.source as SimulationNode).x ?? 0) + ((d.target as SimulationNode).x ?? 0)) / 2)
+        .attr('y', (d) => (((d.source as SimulationNode).y ?? 0) + ((d.target as SimulationNode).y ?? 0)) / 2)
+
+      node.attr('transform', (d) => `translate(${d.x ?? 0},${d.y ?? 0})`)
+    })
 
     // Click on background to deselect
     svg.on('click', () => onNodeSelect(null))
