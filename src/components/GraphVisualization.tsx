@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
-import type { GraphData, GraphNode, GraphRelationship } from '../types'
+import type { GraphData, GraphNode } from '../types'
 import { cn } from '../lib/utils'
 
 interface GraphVisualizationProps {
@@ -11,14 +11,15 @@ interface GraphVisualizationProps {
   className?: string
 }
 
-// D3 simulation node type with position properties
-type SimulationNode = GraphNode & d3.SimulationNodeDatum
+// D3 simulation node type - GraphNode already has all required simulation properties
+// (x, y, vx, vy, fx, fy) so we can use it directly
+type SimulationNode = GraphNode
 
 // D3 simulation link type
-type SimulationLink = GraphRelationship & {
-  source: SimulationNode
-  target: SimulationNode
-}
+// Note: source/target must remain as union types because D3 mutates them:
+// - Before init: string IDs
+// - After init: node object references
+type SimulationLink = d3.SimulationLinkDatum<SimulationNode>
 
 // Color mapping for node types - using Neo4j brand colors
 const nodeColors: Record<string, string> = {
@@ -85,7 +86,7 @@ export function GraphVisualization({
     svg.call(zoom)
 
     // Create force simulation
-    const simulation = d3.forceSimulation<SimulationNode>(data.nodes as SimulationNode[])
+    const simulation = d3.forceSimulation<SimulationNode>(data.nodes)
       .force('link', d3.forceLink<SimulationNode, SimulationLink>(data.relationships)
         .id((d) => d.id)
         .distance(100))
@@ -133,7 +134,7 @@ export function GraphVisualization({
 
     // Draw nodes
     const node = g.append('g')
-      .selectAll('g')
+      .selectAll<SVGGElement, SimulationNode>('g')
       .data(data.nodes)
       .join('g')
       .attr('cursor', 'pointer')
